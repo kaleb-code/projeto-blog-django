@@ -54,3 +54,10 @@ class PostAdmin(admin.ModelAdmin):
         "slug": ('title',),
     }
     autocomplete_fields = 'tag', 'category',
+
+    def save_model(self,request,obj,form,change):
+        if change:
+            obj.updated_by = request.user #type:ignore
+        else:
+            obj.created_by = request.user #type:ignore
+        obj.save()
