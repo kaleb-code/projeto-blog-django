@@ -5,7 +5,7 @@ from django.shortcuts import render,redirect
 from blog.models import Post,Page
 from django.db.models import Q
 from django.contrib.auth.models import User
-from django.http import Http404, HttpRequest, HttpResponse
+from django.http import Http404
 from django.views.generic import ListView
 
 PER_PAGE = 9
@@ -43,7 +43,7 @@ class CreatedByListView(PostListView):
         })
         return context
     
-    def get(self, request, *args, **kwargs) -> HttpResponse:
+    def get(self, request, *args, **kwargs):
         author_id = self.kwargs.get('author_id')
         user = User.objects.filter(pk=author_id).first()
 
@@ -75,27 +75,20 @@ class Category(PostListView):
         })
         return context
 
-def category(request,slug):
-    posts = Post.objects.get_published()\
-        .filter(category__slug=slug)
-
-    paginator = Paginator(posts, PER_PAGE)
-    page_number = request.GET.get("page")
-    page_obj = paginator.get_page(page_number)
-
-    if len(posts) == 0:
-        raise Http404()
+class TagListView(PostListView):
+    allow_empty = False
+    def get_queryset(self) -> QuerySet[Any]:
+        return super().get_queryset().filter(
+            tag__slug=self.kwargs.get('slug')
+        )    
     
-    page_title = f'{page_obj[0].category.name} - '
-
-    return render(
-        request,
-        'blog/pages/index.html',
-        {
-            'page_obj': page_obj,
+    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        page_title = f'{self.object_list[0].tag.first().name} - ' #type:ignore
+        context.update({
             'page_title':page_title,
-        }
-    )
+        })
+        return context
 
 def tag(request,slug):
     posts = Post.objects.get_published()\
