@@ -1,27 +1,20 @@
 from typing import Any, Dict
 from django.core.paginator import Paginator
 from django.db.models.query import QuerySet
-from django.shortcuts import render
+from django.shortcuts import render,redirect
 from blog.models import Post,Page
 from django.db.models import Q
 from django.contrib.auth.models import User
-from django.http import Http404
+from django.http import Http404, HttpRequest, HttpResponse
 from django.views.generic import ListView
 
 PER_PAGE = 9
 
 class PostListView(ListView):
-    model = Post
     template_name = 'blog/pages/index.html'
     context_object_name = 'posts'
-    ordering = '-id',
     paginate_by = PER_PAGE
     queryset = Post.objects.get_published()
-
-    # def get_queryset(self):
-    #     queryset = super().get_queryset()
-    #     queryset = queryset.filter(is_published=True)
-    #     return queryset
 
     def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
         context = super().get_context_data(**kwargs)
@@ -30,20 +23,6 @@ class PostListView(ListView):
         })
         return context
 
-# def index(request):
-#     posts = Post.objects.get_published()
-#     paginator = Paginator(posts, PER_PAGE)
-#     page_number = request.GET.get("page")
-#     page_obj = paginator.get_page(page_number)
-
-#     return render(
-#         request,
-#         'blog/pages/index.html',
-#         {
-#             'page_obj': page_obj,
-#             'page_title':'Home - ',
-#         }
-#     )
 
 def created_by(request,author_id):
     user = User.objects.filter(pk=author_id).first()
@@ -70,6 +49,43 @@ def created_by(request,author_id):
             'page_title':page_title,
         }
     )
+
+class CreatedByListView(PostListView):
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._temp_context:dict[str,Any] = {}
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self._temp_context['user']
+        
+        user_full_name = user.username
+
+        if user.first_name:
+            user_full_name = f'{user.first_name} {user.last_name}'
+        page_title = user_full_name + ' posts - '
+        context.update({
+            'page_title':page_title,
+        })
+        return context
+    
+    def get(self, request, *args, **kwargs) -> HttpResponse:
+        author_id = self.kwargs.get('author_id')
+        user = User.objects.filter(pk=author_id).first()
+
+        if user is None:
+            raise Http404()
+        self._temp_context.update({
+            'author_id':author_id,
+            'user':user,
+        })
+        return super().get(request, *args, **kwargs)
+    
+    def get_queryset(self):
+        qs = super().get_queryset()
+        qs = qs.filter(created_by__pk=self._temp_context['user'].pk)
+        return qs
+    
 
 def category(request,slug):
     posts = Post.objects.get_published()\
